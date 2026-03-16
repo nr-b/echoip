@@ -75,6 +75,25 @@ func ipFromForwardedForHeader(v string) string {
 	return before
 }
 
+func IsNat64Address(ip net.IP) bool {
+	ip = ip.To16()
+	if ip == nil {
+		return false
+	}
+
+	// Check if it matches the well-known NAT64 prefix: 64:ff9b::/96
+	wellKnownPrefix := []byte{0x00, 0x64, 0xff, 0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+
+	// Compare the first 12 bytes with the well-known prefix
+	for i := 0; i < 12; i++ {
+		if ip[i] != wellKnownPrefix[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
 // ipFromRequest detects the IP address for this transaction.
 //
 // * `headers` - the specific HTTP headers to trust
@@ -114,6 +133,10 @@ func ipFromRequest(headers []string, r *http.Request, customIP bool) (net.IP, er
 		if ip == nil {
 			return nil, fmt.Errorf("could not parse IP: %s", remoteIP)
 		}
+	}
+	if IsNat64Address(ip) {
+		// Extract the last 4 bytes as the IPv4 address
+		ip = net.IPv4(ip[12], ip[13], ip[14], ip[15])
 	}
 	return ip, nil
 }
